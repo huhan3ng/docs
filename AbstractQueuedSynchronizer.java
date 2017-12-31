@@ -834,6 +834,7 @@ public abstract class AbstractQueuedSynchronizer
      */
     private final boolean parkAndCheckInterrupt() {
         LockSupport.park(this);	//将当前线程阻塞
+		//unsafe源码	//http://hg.openjdk.java.net/jdk7/jdk7/hotspot/file/4fc084dac61e/src/share/vm/prims/unsafe.cpp
         return Thread.interrupted();
     }
 
@@ -865,7 +866,7 @@ public abstract class AbstractQueuedSynchronizer
                     setHead(node);
                     p.next = null; // help GC
                     failed = false;
-                    return interrupted; //成功的话返回中断标记为false，也就是不阻塞当前线程
+                    return interrupted; //成功的话返回中断标记为false，而且不阻塞当前线程
                 }
                 if (shouldParkAfterFailedAcquire(p, node) &&
                     parkAndCheckInterrupt())	//设置进程为阻塞状态，并返回中断状态
