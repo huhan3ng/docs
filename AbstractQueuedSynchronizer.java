@@ -834,7 +834,11 @@ public abstract class AbstractQueuedSynchronizer
      */
     private final boolean parkAndCheckInterrupt() {
         LockSupport.park(this);	//将当前线程阻塞
-		//unsafe源码	//http://hg.openjdk.java.net/jdk7/jdk7/hotspot/file/4fc084dac61e/src/share/vm/prims/unsafe.cpp
+		/* unsafe源码 http://hg.openjdk.java.net/jdk7/jdk7/hotspot/file/4fc084dac61e/src/share/vm
+		 * Unsafe_Park调用thread->parker()->park(isAbsolute != 0, time);
+		 * Parker::park函数有posix，windows，solaris三种实现
+		 * os_posix.cpp void Parker::park(bool isAbsolute, jlong time) {
+		 */
         return Thread.interrupted();
     }
 
