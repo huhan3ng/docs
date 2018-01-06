@@ -1,0 +1,144 @@
+\documentclass{ctexart}
+\usepackage{tikz,pgf-umlsd,bytefield,xcolor,listings}  %加载包，因为我们在用中文写文档，所以必须加载这个包，否则不支持中文
+\songti
+\usetikzlibrary{arrows,shadows}
+\usepackage{lscape}
+\lstset{
+    columns=fixed,
+    numbers=left,                                        % 在左侧显示行号
+    frame=none,                                          % 不显示背景边框
+    backgroundcolor=\color[RGB]{245,245,244},            % 设定背景颜色
+    keywordstyle=\color[RGB]{40,40,255},                 % 设定关键字颜色
+    numberstyle=\footnotesize\color{darkgray},           % 设定行号格式
+    commentstyle=\it\color[RGB]{0,96,96},                % 设置代码注释的格式
+    stringstyle=\rmfamily\slshape\color[RGB]{128,0,0},   % 设置字符串格式
+    showstringspaces=false,                              % 不显示字符串中的空格
+    language=c++,                                        % 设置语言
+}
+
+\author{胡汉三}  % 作者
+\title{充电座协议文档V3}  %文档标题
+\begin{document}
+    \maketitle
+    \setlength{\parindent}{0pt}
+    一.交互流程\\
+    用户使用客户端扫码之后，客户端首先查询充电口状态，之后下发充电指令。APP接收的合法qrcode格式是 bd=00301[0-9]\{5\}\\
+    \\
+    \begin{sequencediagram}
+    \newthread{a}{:SB-C}
+    \newinst[6]{b}{:CHARGER}
+    \mess{a}{查询充电座状态}{b}
+    \mess{b}{反馈状态}{a}
+    \mess{a}{根据状态下发充电指令}{b}
+    \mess{b}{反馈充电结果}{a}
+    \end{sequencediagram}
+    \\
+    \\
+    \begin{sequencediagram}
+    \newthread{a}{:SB-RENAME}
+    \newinst[6]{b}{:CHARGER}
+    \mess{a}{列表中选择设备，发送改名指令}{b}
+    \mess{b}{反馈版本号及名称}{a}
+    \end{sequencediagram}
+    \\
+    \\
+    SB-RAME首先在设备列表选择设备，然后扫描二维码获取新名字，二维码格式为 .*bd=([0-9]+) , app选择括号中命中的部分作为下发的name字段，为数值格式。\\
+
+    二.通信方式\\
+    1.充电座与APP通讯采用BLE协议。\\
+    2.service uuid为ffe0, characteristic uuid为ffe1。\\
+    3.APP发送数据(充电座接收数据)通过characteristic write no response, APP接收数据(充电座发送数据)通过characteristic notify。\\
+    三.发送报文格式
+    \\
+    \\
+    \begin{bytefield}[endianness=little,bitwidth=0.05\linewidth]{20}
+    \bitheader{0-19} \\
+    \bitbox{4}{Sequence} & \bitbox{1}{\tiny Pub Key} &
+    \bitbox{4}{Token} & \bitbox{1}{\tiny Time} &
+    \bitbox{4}{Flag} & \bitbox{6}{Action}
+    \end{bytefield}
+    \begin{table}[h]
+    {\renewcommand\arraystretch{1.25}
+    \begin{tabular}{|l|l|l|} \hline
+    字段名:& \multicolumn{2}{l|}{含义及用法} \\
+    \hline
+    \hline
+    Sequence& \multicolumn{2}{p{0.8\linewidth}|}{\raggedright 指令防重放所需字段，在每次成功处理充电指令后递增。} \\ \hline
+    Pub Key& \multicolumn{2}{p{0.8\linewidth}|}{\raggedright 公钥，又服务器产生的随机数，会在校验Token时用到。} \\ \hline
+    Token& \multicolumn{2}{p{0.8\linewidth}|}{\raggedright 指令合法性校验位。} \\ \hline
+    Time& \multicolumn{2}{p{0.8\linewidth}|}{\raggedright 充电时长(单位分钟)} \\ \hline
+    Flag& \multicolumn{2}{p{0.8\linewidth}|}{\raggedright 充电标记位,充电座每个口存储一个值，当持有该值的指令下发时，忽略指令中指定的左右口，直接打开该口，并且每次成功处理充电指令，都需要更新该值。} \\ \hline
+    \end{tabular}}
+    \end{table}
+    \\
+    \\
+    \\
+    \\
+    \\
+        摘要算法如下(in Java)：
+    \begin{lstlisting}[language=java]
+    public static int SDBMHash(String str) {
+        int hash = 0;
+        for (int i = 0; i < str.length(); i++) {
+            hash = str.charAt(i) + (hash << 6) +
+            (hash << 16) - hash;
+        }
+        return (hash & 0x7FFFFFFF);
+    }
+    \end{lstlisting}
+        计算方式如下：
+    \begin{lstlisting}[language=java]
+    String hashParam = "%d%s%d%d%d%d";
+    //Sequence+""+PubKey+PrivKey+Time+Flag ,  "" means BLE PIN
+    int token = SDBMHash(String.format
+        (hashParam, sequence, "", publicKey, privateKey, time, flag));
+    \end{lstlisting}
+    \par
+        目前需要使用的Action列表：\\
+    1.设置充电电源状态\\
+    2.查询状态\\
+    3.修改蓝牙名称\\
+    4.修改私钥\\
+    其他inst仍然不变，修改蓝牙名称格式变更：\\
+    指令位+名称位,name 4字节unsigned int转换为SBC+固定10位十进制数字，高位补0，比如下发0000000A,那么对应的名字就是 SBC0000000010 \\
+    \\
+    \begin{bytefield}[endianness=little,bitwidth=0.05\linewidth]{20}
+    \bitheader{0-5} \\
+    \bitbox{1}{\tiny 0x83} &
+    \bitbox{4}{name} &
+    \bitbox{1}{\tiny 0x00} &
+    \end{bytefield}
+     \\
+     \\
+    四.响应报文格式
+    \\
+    \\
+    \begin{bytefield}[endianness=little,bitwidth=0.05\linewidth]{20}
+    \bitheader{0-19} \\
+    \bitbox{1}{\tiny LEN} & \bitbox{1}{\tiny STATE} &
+    \bitbox{16}{\tiny NAME} & \bitbox{2}{\tiny VERSION}
+    \end{bytefield}
+    \\
+    \\
+    五.设备命名规则
+    (一格为一字符，非比特位。)
+    \\
+    \\
+    \begin{bytefield}[endianness=little,bitwidth=0.1\linewidth]{10}
+    \bitheader{0-9} \\
+    \bitbox{1}{\tiny 0} & \bitbox{2}{\tiny 版本号} &
+    \bitbox{2}{\tiny 出厂批次} & \bitbox{5}{\tiny 设备编号}
+    \end{bytefield}
+    \\
+    \\
+    例如，第二版第一批次出厂的设备为：\\
+    \begin{bytefield}[endianness=little,bitwidth=0.1\linewidth]{10}
+    \bitbox{1}{0} & \bitbox{2}{02} &
+    \bitbox{2}{01} & \bitbox{5}{00005}
+    \end{bytefield}
+    \\
+    六.充电桩协议
+    \\
+    出厂设备集合A: {}
+
+\end{document}
