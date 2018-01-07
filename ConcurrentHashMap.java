@@ -852,7 +852,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * creation, or 0 for default. After initialization, holds the
      * next element count value upon which to resize the table.
 	 * -1表示初始化，-2表示有一个线程在参与resize， -3....两个
-	 * >0时表示下一次resize或者init之后table的大小
+	 * >0时表示下一次resize或者init之后table的大小。除此之外，高位还用来存resizeStamp了
      */
     private transient volatile int sizeCtl;
 
@@ -2292,7 +2292,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * Must be negative when shifted left by RESIZE_STAMP_SHIFT.
      */
     static final int resizeStamp(int n) {
-        return Integer.numberOfLeadingZeros(n) | (1 << (RESIZE_STAMP_BITS - 1));
+        return Integer.numberOfLeadingZeros(n) | (1 << (RESIZE_STAMP_BITS - 1)); //对应n<<1扩容，只要resize，leadingzero数量就变
     }
 
     /**
@@ -2377,7 +2377,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     final Node<K,V>[] helpTransfer(Node<K,V>[] tab, Node<K,V> f) {
         Node<K,V>[] nextTab; int sc;
         if (tab != null && (f instanceof ForwardingNode) &&
-            (nextTab = ((ForwardingNode<K,V>)f).nextTable) != null) {//forwardingnode存在
+            (nextTab = ((ForwardingNode<K,V>)f).nextTable) != null) {//forwardingnode存在,这会等于null吗？？？没找到可能位null的赋值啊
             int rs = resizeStamp(tab.length);	//生成resize标记
             while (nextTab == nextTable && table == tab &&
                    (sc = sizeCtl) < 0) {	//sizectl<0表示resize还没完成，那就继续
