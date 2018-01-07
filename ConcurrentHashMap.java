@@ -2509,15 +2509,15 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                     if (tabAt(tab, i) == f) {
                         Node<K,V> ln, hn;
                         if (fh >= 0) {
-                            int runBit = fh & n;
+                            int runBit = fh & n;(//按位与，n是形如10000的值，因此fh>=n runBit就不是0， 否则就是0，就是取n的最高位和fh的与
                             Node<K,V> lastRun = f;
                             for (Node<K,V> p = f.next; p != null; p = p.next) {	//求last runbit
                                 int b = p.hash & n;
-                                if (b != runBit) {
+                                if (b != runBit) {//如果b=runBit,说明p.hash只和fh在低位有区别，找最后一个和它高位(就是n的最高位)有区别的
                                     runBit = b;
                                     lastRun = p;
                                 }
-                            }
+                            } // 这时候lastRun指向链表最后一个与fh在n的最高位不同的，目的是提高后面链表拆分性能，避免多余的复制动作
                             if (runBit == 0) {	//runBit以概率(概率是多少？？)确定头尾和ln，hn对应关系
                                 ln = lastRun;
                                 hn = null;
@@ -2526,7 +2526,8 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                                 hn = lastRun;
                                 ln = null;
                             }
-							//把原来链表拆成两份，一个连到bin头部f上，另一个连到尾部h上
+			    //把原来链表拆成两份，从lastRun开始往后的node，都与fh有着相同的runBit，所以不用遍历了，直接连上去
+			    //lastRun之前的节点，按runBit一次分到两个不同的链表上
                             for (Node<K,V> p = f; p != lastRun; p = p.next) {
                                 int ph = p.hash; K pk = p.key; V pv = p.val;
                                 if ((ph & n) == 0)
@@ -2534,6 +2535,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                                 else
                                     hn = new Node<K,V>(ph, pk, pv, hn);
                             }
+			    //hash&n最高为为1的都放到 n~2n之间， hash&n最高位位0的都放到0~n之间
                             setTabAt(nextTab, i, ln);	//插入到新表中，然后更新旧表fwd节点
                             setTabAt(nextTab, i + n, hn);
                             setTabAt(tab, i, fwd);
